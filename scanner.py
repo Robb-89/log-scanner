@@ -1,12 +1,14 @@
 import argparse
 
-parser = argparse.ArgumentParser(description="Flag IPs with repeated failed SSH logins.")
-parser.add_argument("--file",default="auth.log", help="Path to the auth.log file")
-parser.add_argument("--threshold", type=int, default=3, help="Number of failed attempts to flag an IP")
+parser = argparse.ArgumentParser(
+    description="Flag IPs with repeated failed SSH logins."
+)
+parser.add_argument("--file", default="auth.log", help="Path to the auth.log file")
+parser.add_argument(
+    "--threshold", type=int, default=3, help="Number of failed attempts to flag an IP"
+)
 
 args = parser.parse_args()
-
-
 
 
 counts = {}
@@ -36,9 +38,11 @@ with open(args.file) as f:
                 breaches.append((ip_address, username, failures))
 
 for ip_address, username, failures in breaches:
-    print(f"ALERT: {ip_address} had {failures} failed login attempts before a successful login by {username}")
+    print(
+        f"ALERT: {ip_address} had {failures} failed login attempts before a successful login by {username}"
+    )
     print()
-    
+
 
 for ip_address in sorted(counts, key=counts.get, reverse=True):
     count = counts[ip_address]
