@@ -1,0 +1,17 @@
+Oct 06 14:01:58 server sshd[2229]: Connection from 203.0.113.45 port 52110 on 10.0.0.5 port 22
+Oct 06 14:02:11 server sshd[2231]: Failed password for root from 203.0.113.45 port 52114 ssh2
+Oct 06 14:02:13 server sshd[2231]: Failed password for admin from 203.0.113.45 port 52116 ssh2
+Oct 06 14:02:14 server sshd[2231]: Connection closed by authenticating user admin 203.0.113.45 port 52116 [preauth]
+Oct 06 14:02:15 server sshd[2240]: Accepted password for robb from 198.51.100.7 port 51022 ssh2
+Oct 06 14:02:15 server sshd[2240]: pam_unix(sshd:session): session opened for user robb by (uid=0)
+Oct 06 14:03:39 server sshd[2251]: Invalid user test from 192.0.2.88 port 40311
+Oct 06 14:03:40 server sshd[2251]: Failed password for invalid user test from 192.0.2.88 port 40311 ssh2
+Oct 06 14:03:42 server CRON[2260]: pam_unix(cron:session): session opened for user root by (uid=0)
+Oct 06 14:04:05 server sshd[2271]: Failed password for root from 203.0.113.45 port 52130 ssh2
+Oct 06 14:05:17 server sshd[2240]: pam_unix(sshd:session): session closed for user robb
+Oct 06 14:05:20 server sshd[2280]: Disconnected from user robb 198.51.100.7 port 51022
+Oct 06 14:06:01 server sshd[2290]: Failed password for root from 192.0.2.200 port 33001 ssh2
+Oct 06 14:06:03 server sshd[2290]: Failed password for root from 192.0.2.200 port 33003 ssh2
+Oct 06 14:06:05 server sshd[2291]: Failed password for admin from 192.0.2.200 port 33005 ssh2
+Oct 06 14:06:07 server sshd[2291]: Failed password for oracle from 192.0.2.200 port 33007 ssh2
+Oct 06 14:06:09 server sshd[2292]: Failed password for ubuntu from 192.0.2.200 port 33009 ssh2
