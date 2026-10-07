@@ -19,6 +19,5 @@ The included auth.log is sample data using reserved documentation IP addresses.
 203.0.113.45: 3 failed login attempts
 
 ## Planned improvements
-- Show usernames attempted by each IP
 - Command-line options for file and threshold
 - Detect failed attempts followed by a successful login
