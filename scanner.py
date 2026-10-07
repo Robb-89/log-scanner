@@ -1,7 +1,18 @@
+import argparse
+
+parser = argparse.ArgumentParser(description="Flag IPs with repeated failed SSH logins.")
+parser.add_argument("--file",default="auth.log", help="Path to the auth.log file")
+parser.add_argument("--threshold", type=int, default=3, help="Number of failed attempts to flag an IP")
+
+args = parser.parse_args()
+
+
+
+
 counts = {}
 users = {}
 
-with open("auth.log") as f:
+with open(args.file) as f:
     for line in f:
         if "Failed password" in line:
             words = line.split()
@@ -16,7 +27,7 @@ with open("auth.log") as f:
 
 for ip_address in sorted(counts, key=counts.get, reverse=True):
     count = counts[ip_address]
-    if count >= 3:
+    if count >= args.threshold:
         names = ", ".join(sorted(set(users[ip_address])))
         print(f"{ip_address}: {count} failed login attempts")
         print(f"  Usernames tried: {names}")
