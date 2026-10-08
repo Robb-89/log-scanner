@@ -3,9 +3,12 @@ import contextlib
 import csv
 import gzip
 import json
+import re
 import sys
 import time
 from datetime import datetime
+
+ISO_TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
 
 
 def parse_args():
@@ -34,6 +37,17 @@ def parse_line(line):
 
 def parse_time(line, year=2000):
     words = line.split()
+    first = words[0]
+
+    # Newer syslog setups (rsyslog, journald) log an ISO 8601 timestamp as a
+    # single token with its own year, instead of classic syslog's
+    # year-less "Mon DD HH:MM:SS".
+    if ISO_TIMESTAMP_RE.match(first):
+        iso_str = first[:-1] + "+00:00" if first.endswith("Z") else first
+        # Drop any UTC offset so timestamps stay comparable even if a log
+        # mixes offset-aware and naive ISO lines (e.g. around a DST change).
+        return datetime.fromisoformat(iso_str).replace(tzinfo=None)
+
     timestamp_str = " ".join(words[0:3])
     timestamp = datetime.strptime(f"{year} " + timestamp_str, "%Y %b %d %H:%M:%S")
     return timestamp

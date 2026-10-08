@@ -28,6 +28,33 @@ def test_parse_time_leap_day():
     assert parse_time(line) == datetime(2000, 2, 29, 8, 0, 0)
 
 
+def test_parse_time_iso_format():
+    line = "2026-10-06T14:02:11 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2"
+    assert parse_time(line) == datetime(2026, 10, 6, 14, 2, 11)
+
+
+def test_parse_time_iso_format_with_offset_and_microseconds():
+    line = "2026-10-06T14:02:11.123456+00:00 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2"
+    assert parse_time(line) == datetime(2026, 10, 6, 14, 2, 11, 123456)
+
+
+def test_parse_time_iso_format_with_z_suffix():
+    line = "2026-10-06T14:02:11Z server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2"
+    assert parse_time(line) == datetime(2026, 10, 6, 14, 2, 11)
+
+
+def test_scan_log_mixes_offset_aware_and_naive_iso_lines(tmp_path):
+    log = tmp_path / "test.log"
+    log.write_text(
+        "2026-10-06T14:00:00 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2\n"
+        "2026-10-06T14:00:05Z server sshd[1]: Failed password for root from 10.0.0.1 port 2 ssh2\n"
+        "2026-10-06T14:00:10+00:00 server sshd[1]: Failed password for root from 10.0.0.1 port 3 ssh2\n"
+    )
+    counts, users, breaches, bursts = scan_log(log, 3, 60)
+    assert counts == {"10.0.0.1": 3}
+    assert bursts == ["10.0.0.1"]
+
+
 def test_scan_log_counts_failures(tmp_path):
     log = tmp_path / "test.log"
     log.write_text(
@@ -71,6 +98,31 @@ def test_scan_log_detects_burst(tmp_path):
     )
     counts, users, breaches, bursts = scan_log(log, 3, 60)
     assert bursts == ["10.0.0.1"]
+
+
+def test_scan_log_handles_iso_format_log(tmp_path):
+    log = tmp_path / "test.log"
+    log.write_text(
+        "2026-10-06T14:00:00 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2\n"
+        "2026-10-06T14:00:05 server sshd[1]: Failed password for root from 10.0.0.1 port 2 ssh2\n"
+        "2026-10-06T14:00:10 server sshd[1]: Failed password for root from 10.0.0.1 port 3 ssh2\n"
+        "2026-10-06T14:00:11 server sshd[1]: Accepted password for root from 10.0.0.1 port 4 ssh2\n"
+    )
+    counts, users, breaches, bursts = scan_log(log, 3, 60)
+    assert counts == {"10.0.0.1": 3}
+    assert bursts == ["10.0.0.1"]
+    assert breaches == [("10.0.0.1", "root", 3)]
+
+
+def test_scan_log_iso_format_year_boundary_not_a_false_burst(tmp_path):
+    log = tmp_path / "test.log"
+    log.write_text(
+        "2025-12-31T23:59:55 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2\n"
+        "2026-01-01T00:00:00 server sshd[1]: Failed password for root from 10.0.0.1 port 2 ssh2\n"
+        "2026-01-01T05:00:00 server sshd[1]: Failed password for root from 10.0.0.1 port 3 ssh2\n"
+    )
+    counts, users, breaches, bursts = scan_log(log, 3, 60)
+    assert bursts == []
 
 
 def test_parse_time_explicit_year():

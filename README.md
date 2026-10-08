@@ -14,6 +14,7 @@ A Python command-line tool that scans SSH authentication logs to detect brute-fo
 - Ranks flagged IPs from most to fewest failures
 - Handles irregular log lines, such as "invalid user" attempts
 - Handles leap-day timestamps safely
+- Understands both classic syslog timestamps (`Oct 06 14:02:11`) and ISO 8601 timestamps (`2026-10-06T14:02:11`) used by rsyslog/journald
 - Configurable log file, threshold, and time window from the command line
 - Exports reports as plain text, CSV, or JSON
 - Reads from stdin (`--file -`) so logs can be piped in, e.g. from `journalctl`
@@ -112,7 +113,3 @@ Tests run automatically on every push using GitHub Actions.
 - `test_scanner.py`: automated tests
 - `auth.log`: sample log data
 - `.github/workflows/tests.yml`: CI configuration
-
-## Planned improvements
-
-- Support newer ISO-style log timestamps (e.g. `2026-10-06T14:02:11`)
