@@ -2,27 +2,29 @@
 
 ![Tests](https://github.com/Robb-89/log-scanner/actions/workflows/tests.yml/badge.svg)
 
-A Python command-line tool that scans SSH authentication logs to detect brute-force login attempts, including attacks that succeeded.
+A Python command-line tool that scans SSH authentication logs to detect brute-force login attempts, including fast automated attacks and attacks that succeeded.
 
 ## Features
 
 - Flags IP addresses with repeated failed login attempts
 - Shows which usernames each flagged IP tried
+- Detects bursts: an IP hitting the failure threshold within a short time window, a sign of automated attacks
 - Detects possible breaches: an IP that fails repeatedly and then logs in successfully
 - Ranks flagged IPs from most to fewest failures
 - Handles irregular log lines, such as "invalid user" attempts
-- Configurable log file and alert threshold from the command line
+- Handles leap-day timestamps safely
+- Configurable log file, threshold, and time window from the command line
 - Exports reports as plain text, CSV, or JSON
 
 ## Usage
 
-Run with defaults (`auth.log`, threshold of 3, text output):
+Run with defaults (`auth.log`, threshold of 3, 60-second window, text output):
 
     python3 scanner.py
 
-Choose a log file and threshold:
+Choose a log file, threshold, and time window:
 
-    python3 scanner.py --file /path/to/auth.log --threshold 5
+    python3 scanner.py --file /path/to/auth.log --threshold 5 --window 120
 
 Export as JSON or CSV:
 
@@ -39,6 +41,8 @@ The included `auth.log` is sample data using reserved documentation IP addresses
 
     ALERT: 192.0.2.200 had 5 failed login attempts before a successful login by ubuntu
 
+    BURST: 192.0.2.200 made 3 or more failed attempts within 60 seconds
+
     192.0.2.200: 5 failed login attempts
       Usernames tried: admin, oracle, root, ubuntu
 
@@ -52,21 +56,23 @@ JSON (`--format json`):
         "ip": "192.0.2.200",
         "failed_attempts": 5,
         "usernames_tried": ["admin", "oracle", "root", "ubuntu"],
+        "burst": true,
         "breached_as": "ubuntu"
       },
       {
         "ip": "203.0.113.45",
         "failed_attempts": 3,
         "usernames_tried": ["admin", "root"],
+        "burst": false,
         "breached_as": null
       }
     ]
 
 CSV (`--format csv`):
 
-    ip,failed_attempts,usernames_tried,breached_as
-    192.0.2.200,5,admin;oracle;root;ubuntu,ubuntu
-    203.0.113.45,3,admin;root,
+    ip,failed_attempts,usernames_tried,burst,breached_as
+    192.0.2.200,5,admin;oracle;root;ubuntu,True,ubuntu
+    203.0.113.45,3,admin;root,False,
 
 ## Running tests
 
@@ -85,5 +91,4 @@ Tests run automatically on every push using GitHub Actions.
 
 ## Planned improvements
 
-- Support newer log timestamp formats
-- Flag only failures that occur within a short time window
+- Support newer ISO-style log timestamps (e.g. `2026-10-06T14:02:11`)
