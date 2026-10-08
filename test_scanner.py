@@ -1,10 +1,11 @@
+import gzip
 import io
 import sys
 from datetime import datetime
 
 import pytest
 
-from scanner import parse_line, parse_time, scan_log, build_report, main
+from scanner import parse_line, parse_time, scan_log, build_report, main, print_stats
 
 
 def test_parse_line_normal():
@@ -160,6 +161,48 @@ def test_scan_log_skips_malformed_line(tmp_path):
     )
     counts, users, breaches, bursts = scan_log(log, 3, 60)
     assert counts == {"10.0.0.1": 2}
+
+
+def test_scan_log_reads_gzip_file(tmp_path):
+    log = tmp_path / "auth.log.1.gz"
+    with gzip.open(log, "wt") as f:
+        f.write("Oct 06 14:02:11 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2\n")
+        f.write("Oct 06 14:02:12 server sshd[1]: Failed password for root from 10.0.0.1 port 2 ssh2\n")
+    counts, users, breaches, bursts = scan_log(log, 2, 60)
+    assert counts == {"10.0.0.1": 2}
+
+
+def test_scan_log_reads_comma_separated_rotated_logs(tmp_path):
+    older = tmp_path / "auth.log.1.gz"
+    with gzip.open(older, "wt") as f:
+        f.write("Oct 06 14:00:00 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2\n")
+        f.write("Oct 06 14:00:05 server sshd[1]: Failed password for root from 10.0.0.1 port 2 ssh2\n")
+    newer = tmp_path / "auth.log"
+    newer.write_text(
+        "Oct 06 14:00:10 server sshd[1]: Failed password for root from 10.0.0.1 port 3 ssh2\n"
+    )
+    counts, users, breaches, bursts = scan_log(f"{older},{newer}", 3, 60)
+    assert counts == {"10.0.0.1": 3}
+    assert bursts == ["10.0.0.1"]
+
+
+def test_scan_log_tracks_total_lines_in_stats(tmp_path):
+    log = tmp_path / "test.log"
+    log.write_text(
+        "Oct 06 14:02:11 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2\n"
+        "Oct 06 14:02:12 server sshd[1]: Connection closed by 10.0.0.1 port 3\n"
+    )
+    stats = {}
+    scan_log(log, 3, 60, stats=stats)
+    assert stats["total_lines"] == 2
+
+
+def test_print_stats_output(capsys):
+    print_stats(total_lines=10, counts={"10.0.0.1": 3, "10.0.0.2": 1}, elapsed_seconds=0.5)
+    err = capsys.readouterr().err
+    assert "10 lines scanned" in err
+    assert "2 unique IPs" in err
+    assert "4 failed attempts" in err
 
 
 def test_scan_log_reads_from_stdin(monkeypatch):

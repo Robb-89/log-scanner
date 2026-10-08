@@ -16,8 +16,10 @@ A Python command-line tool that scans SSH authentication logs to detect brute-fo
 - Handles leap-day timestamps safely
 - Configurable log file, threshold, and time window from the command line
 - Exports reports as plain text, CSV, or JSON
-- Reads from stdin (`--file -`) so logs can be piped in, e.g. from `zcat` or `journalctl`
+- Reads from stdin (`--file -`) so logs can be piped in, e.g. from `journalctl`
+- Reads `.gz` log files transparently, and a comma-separated list of rotated logs (oldest first) as one continuous scan
 - Can write the report to a file (`--output`) instead of stdout
+- Prints a summary line (lines scanned, unique IPs, failed attempts, runtime) to stderr on every run
 
 ## Usage
 
@@ -34,9 +36,14 @@ Export as JSON or CSV:
     python3 scanner.py --format json
     python3 scanner.py --format csv > report.csv
 
-Pipe in a log instead of pointing at a file, and write the report to disk:
+Pipe a log in instead of pointing at a file, and write the report to disk:
 
-    zcat auth.log.2.gz | python3 scanner.py --file - --output report.txt
+    journalctl -u sshd | python3 scanner.py --file - --output report.txt
+
+Read a gzip-compressed log directly, or scan a set of rotated logs (oldest first) as one continuous log:
+
+    python3 scanner.py --file auth.log.2.gz
+    python3 scanner.py --file auth.log.2.gz,auth.log.1,auth.log
 
 See all options:
 
@@ -45,6 +52,10 @@ See all options:
 The included `auth.log` is sample data using reserved documentation IP addresses.
 
 ## Example output
+
+The `STATS` line is printed to stderr on every run, independent of `--format`:
+
+    STATS: 18 lines scanned, 3 unique IPs, 9 failed attempts, 0.001s
 
     ALERT: 192.0.2.200 had 5 failed login attempts before a successful login by ubuntu
 
