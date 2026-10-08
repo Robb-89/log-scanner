@@ -4,6 +4,18 @@
 
 A Python command-line tool that scans SSH authentication logs to detect brute-force login attempts, including fast automated attacks and attacks that succeeded.
 
+## What this is
+
+This is a portfolio/practice project, not a production security tool. For real-world brute-force defense, use something battle-tested like [fail2ban](https://github.com/fail2ban/fail2ban) or [CrowdSec](https://github.com/crowdsecurity/crowdsec) — they do real-time blocking and shared threat intel, which this doesn't attempt.
+
+What this repo is for instead:
+
+- A clean, tested example of a small Python CLI done properly (argparse, CSV/JSON export, pytest, CI) rather than a one-off script.
+- A security-adjacent exercise in correctly parsing messy, real-world log data — handling malformed lines, timestamp formats, and year rollovers without crashing.
+- A worked example of iterative hardening: the commit history goes from a basic failed-login counter to one that handles leap days, resets breach counts correctly, and caps memory under a mass-scanning event.
+
+It's genuinely useful for a quick one-off check against a personal server's `auth.log`, or as a teaching/reference example — just not as a fleet-wide security tool.
+
 ## Features
 
 - Flags IP addresses with repeated failed login attempts, whether by password or by SSH key (`Failed publickey`)
