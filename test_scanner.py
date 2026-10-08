@@ -1,5 +1,4 @@
-from scanner import parse_line, scan_log
-
+from scanner import parse_line, scan_log, build_report
 
 def test_parse_line_normal():
     line = "Oct 06 14:02:11 server sshd[2231]: Failed password for root from 203.0.113.45 port 52114 ssh2"
@@ -43,3 +42,18 @@ def test_scan_log_ignores_normal_login(tmp_path):
     )
     counts, users, breaches = scan_log(log, 3)
     assert breaches == []
+
+
+def test_build_report():
+    counts = {"10.0.0.1": 4, "10.0.0.2": 1}
+    users = {"10.0.0.1": ["root", "admin", "root", "root"], "10.0.0.2": ["test"]}
+    breaches = [("10.0.0.1", "root", 4)]
+    report = build_report(counts, users, breaches, 3)
+    assert report == [
+        {
+            "ip": "10.0.0.1",
+            "failed_attempts": 4,
+            "usernames_tried": ["admin", "root"],
+            "breached_as": "root",
+        }
+    ]
