@@ -16,6 +16,8 @@ A Python command-line tool that scans SSH authentication logs to detect brute-fo
 - Handles leap-day timestamps safely
 - Configurable log file, threshold, and time window from the command line
 - Exports reports as plain text, CSV, or JSON
+- Reads from stdin (`--file -`) so logs can be piped in, e.g. from `zcat` or `journalctl`
+- Can write the report to a file (`--output`) instead of stdout
 
 ## Usage
 
@@ -31,6 +33,10 @@ Export as JSON or CSV:
 
     python3 scanner.py --format json
     python3 scanner.py --format csv > report.csv
+
+Pipe in a log instead of pointing at a file, and write the report to disk:
+
+    zcat auth.log.2.gz | python3 scanner.py --file - --output report.txt
 
 See all options:
 

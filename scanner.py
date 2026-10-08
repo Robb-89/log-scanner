@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import csv
 import json
 import sys
@@ -7,7 +8,8 @@ from datetime import datetime
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Flag IPs with repeated failed SSH logins.")
-    parser.add_argument("--file", default="auth.log", help="Path to the auth.log file")
+    parser.add_argument("--file", default="auth.log", help="Path to the auth.log file (use '-' to read from stdin)")
+    parser.add_argument("--output", help="Write the report to this file instead of stdout")
     parser.add_argument("--threshold", type=int, default=3, help="Number of failed attempts to flag an IP")
     parser.add_argument("--window", type=int, default=60, help="Seconds within which threshold failures count as a burst")
     parser.add_argument("--format", choices=["text", "csv", "json"], default="text", help="Output format")
@@ -38,14 +40,17 @@ def scan_log(path, threshold, window):
     current_year = 2000
     last_month = None
 
-    try:
-        f = open(path)
-    except OSError as e:
-        print(f"Error: could not read log file '{path}': {e.strerror}", file=sys.stderr)
-        sys.exit(1)
+    if path == "-":
+        lines = sys.stdin
+    else:
+        try:
+            lines = open(path)
+        except OSError as e:
+            print(f"Error: could not read log file '{path}': {e.strerror}", file=sys.stderr)
+            sys.exit(1)
 
-    with f:
-        for line in f:
+    try:
+        for line in lines:
             if "Failed password" in line or "Failed publickey" in line:
                 try:
                     ip_address, username = parse_line(line)
@@ -86,6 +91,9 @@ def scan_log(path, threshold, window):
                 failures = counts.get(ip_address, 0)
                 if failures >= threshold:
                     breaches.append((ip_address, username, failures))
+    finally:
+        if lines is not sys.stdin:
+            lines.close()
 
     return counts, users, breaches, bursts
 
@@ -156,10 +164,7 @@ def print_csv(report):
         ])
 
 
-def main():
-    args = parse_args()
-    counts, users, breaches, bursts = scan_log(args.file, args.threshold, args.window)
-
+def write_report(args, counts, users, breaches, bursts):
     if args.format == "json":
         print_json(build_report(counts, users, breaches, bursts, args.threshold))
     elif args.format == "csv":
@@ -169,6 +174,22 @@ def main():
         print_bursts(bursts, args.threshold, args.window)
         print_root_attempts(counts, users, args.threshold)
         print_report(counts, users, args.threshold)
+
+
+def main():
+    args = parse_args()
+    counts, users, breaches, bursts = scan_log(args.file, args.threshold, args.window)
+
+    if args.output:
+        try:
+            out_file = open(args.output, "w")
+        except OSError as e:
+            print(f"Error: could not write output file '{args.output}': {e.strerror}", file=sys.stderr)
+            return 1
+        with out_file, contextlib.redirect_stdout(out_file):
+            write_report(args, counts, users, breaches, bursts)
+    else:
+        write_report(args, counts, users, breaches, bursts)
 
     return 1 if breaches or bursts else 0
 

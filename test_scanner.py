@@ -1,3 +1,4 @@
+import io
 import sys
 from datetime import datetime
 
@@ -159,6 +160,45 @@ def test_scan_log_skips_malformed_line(tmp_path):
     )
     counts, users, breaches, bursts = scan_log(log, 3, 60)
     assert counts == {"10.0.0.1": 2}
+
+
+def test_scan_log_reads_from_stdin(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO(
+            "Oct 06 14:02:11 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2\n"
+            "Oct 06 14:02:12 server sshd[1]: Failed password for root from 10.0.0.1 port 2 ssh2\n"
+        ),
+    )
+    counts, users, breaches, bursts = scan_log("-", 3, 60)
+    assert counts == {"10.0.0.1": 2}
+
+
+def test_main_writes_report_to_output_file(tmp_path, monkeypatch):
+    log = tmp_path / "test.log"
+    log.write_text(
+        "Oct 06 14:02:11 server sshd[1]: Accepted password for robb from 10.0.0.5 port 4 ssh2\n"
+    )
+    output = tmp_path / "report.txt"
+    monkeypatch.setattr(
+        sys, "argv", ["scanner.py", "--file", str(log), "--output", str(output)]
+    )
+    assert main() == 0
+    assert output.exists()
+
+
+def test_main_output_file_error_returns_nonzero(tmp_path, monkeypatch, capsys):
+    log = tmp_path / "test.log"
+    log.write_text(
+        "Oct 06 14:02:11 server sshd[1]: Accepted password for robb from 10.0.0.5 port 4 ssh2\n"
+    )
+    bad_output = tmp_path / "no-such-dir" / "report.txt"
+    monkeypatch.setattr(
+        sys, "argv", ["scanner.py", "--file", str(log), "--output", str(bad_output)]
+    )
+    assert main() == 1
+    assert "could not write output file" in capsys.readouterr().err
 
 
 def test_scan_log_missing_file_exits_cleanly(tmp_path, capsys):
