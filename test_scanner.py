@@ -236,6 +236,59 @@ def test_print_root_attempts_only_above_threshold(capsys):
     assert "10.0.0.2" not in out
 
 
+def test_scan_log_caps_new_ips_at_max_tracked_ips(tmp_path):
+    log = tmp_path / "test.log"
+    log.write_text(
+        "".join(
+            f"Oct 06 14:00:{i:02d} server sshd[1]: Failed password for root from 10.0.0.{i} port 1 ssh2\n"
+            for i in range(10)
+        )
+    )
+    stats = {}
+    counts, users, breaches, bursts = scan_log(log, 3, 60, stats=stats, max_tracked_ips=5)
+    assert len(counts) == 5
+    assert stats["dropped_attempts"] == 5
+
+
+def test_scan_log_max_tracked_ips_does_not_drop_already_tracked_ip(tmp_path):
+    log = tmp_path / "test.log"
+    log.write_text(
+        "Oct 06 14:00:00 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2\n"
+        # A new IP shows up once the cap (1) is already full and gets dropped.
+        "Oct 06 14:00:01 server sshd[1]: Failed password for root from 10.0.0.2 port 2 ssh2\n"
+        # The already-tracked IP keeps accumulating normally past the cap.
+        "Oct 06 14:00:02 server sshd[1]: Failed password for root from 10.0.0.1 port 3 ssh2\n"
+        "Oct 06 14:00:03 server sshd[1]: Failed password for root from 10.0.0.1 port 4 ssh2\n"
+    )
+    counts, users, breaches, bursts = scan_log(log, 3, 60, max_tracked_ips=1)
+    assert counts == {"10.0.0.1": 3}
+    assert bursts == ["10.0.0.1"]
+
+
+def test_scan_log_max_tracked_ips_none_means_unlimited(tmp_path):
+    log = tmp_path / "test.log"
+    log.write_text(
+        "".join(
+            f"Oct 06 14:00:{i:02d} server sshd[1]: Failed password for root from 10.0.0.{i} port 1 ssh2\n"
+            for i in range(10)
+        )
+    )
+    counts, users, breaches, bursts = scan_log(log, 3, 60, max_tracked_ips=0)
+    assert len(counts) == 10
+
+
+def test_print_stats_includes_dropped_attempts_note(capsys):
+    print_stats(total_lines=10, counts={"10.0.0.1": 3}, elapsed_seconds=0.5, dropped_attempts=42)
+    err = capsys.readouterr().err
+    assert "42 attempts from untracked IPs" in err
+
+
+def test_print_stats_omits_note_when_nothing_dropped(capsys):
+    print_stats(total_lines=10, counts={"10.0.0.1": 3}, elapsed_seconds=0.5)
+    err = capsys.readouterr().err
+    assert "untracked IPs" not in err
+
+
 def test_scan_log_skips_malformed_line(tmp_path):
     log = tmp_path / "test.log"
     log.write_text(

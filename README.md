@@ -21,6 +21,7 @@ A Python command-line tool that scans SSH authentication logs to detect brute-fo
 - Reads `.gz` log files transparently, and a comma-separated list of rotated logs (oldest first) as one continuous scan
 - Can write the report to a file (`--output`) instead of stdout
 - Prints a summary line (lines scanned, unique IPs, failed attempts, runtime) to stderr on every run
+- Caps memory during a massive scanning event: stops tracking new distinct IPs past `--max-tracked-ips` (default 200,000; already-tracked IPs are unaffected)
 
 ## Usage
 
@@ -45,6 +46,11 @@ Read a gzip-compressed log directly, or scan a set of rotated logs (oldest first
 
     python3 scanner.py --file auth.log.2.gz
     python3 scanner.py --file auth.log.2.gz,auth.log.1,auth.log
+
+Lower or disable the distinct-IP tracking cap (default 200,000; use 0 for no limit):
+
+    python3 scanner.py --max-tracked-ips 50000
+    python3 scanner.py --max-tracked-ips 0
 
 See all options:
 

@@ -21,6 +21,14 @@ def parse_args():
         "logs (oldest first, e.g. auth.log.2.gz,auth.log.1,auth.log)",
     )
     parser.add_argument("--output", help="Write the report to this file instead of stdout")
+    parser.add_argument(
+        "--max-tracked-ips",
+        type=int,
+        default=200_000,
+        help="Stop tracking new distinct IPs once this many are already tracked, to "
+        "cap memory during a massive scanning event. Already-tracked IPs are "
+        "unaffected. Use 0 for no limit (default: 200000)",
+    )
     parser.add_argument("--threshold", type=int, default=3, help="Number of failed attempts to flag an IP")
     parser.add_argument("--window", type=int, default=60, help="Seconds within which threshold failures count as a burst")
     parser.add_argument("--format", choices=["text", "csv", "json"], default="text", help="Output format")
@@ -74,7 +82,7 @@ def iter_log_lines(path):
             yield from f
 
 
-def scan_log(path, threshold, window, stats=None):
+def scan_log(path, threshold, window, stats=None, max_tracked_ips=None):
     counts = {}
     users = {}
     times = {}
@@ -84,6 +92,7 @@ def scan_log(path, threshold, window, stats=None):
     current_year = 2000
     last_month = None
     total_lines = 0
+    dropped_attempts = 0
 
     for line in iter_log_lines(path):
         total_lines += 1
@@ -103,6 +112,18 @@ def scan_log(path, threshold, window, stats=None):
                     timestamp = parse_time(line, current_year)
                 last_month = timestamp.month
             except (ValueError, IndexError):
+                continue
+
+            # Cap the number of distinct IPs we hold full detail for, so a
+            # massive scanning event (millions of one-off source IPs) can't
+            # grow memory without bound. IPs already being tracked are
+            # unaffected; only new ones are refused once the cap is hit.
+            if (
+                max_tracked_ips
+                and ip_address not in counts
+                and len(counts) >= max_tracked_ips
+            ):
+                dropped_attempts += 1
                 continue
 
             counts[ip_address] = counts.get(ip_address, 0) + 1
@@ -135,6 +156,7 @@ def scan_log(path, threshold, window, stats=None):
 
     if stats is not None:
         stats["total_lines"] = total_lines
+        stats["dropped_attempts"] = dropped_attempts
 
     return counts, users, breaches, bursts
 
@@ -205,14 +227,16 @@ def print_csv(report):
         ])
 
 
-def print_stats(total_lines, counts, elapsed_seconds):
+def print_stats(total_lines, counts, elapsed_seconds, dropped_attempts=0):
     unique_ips = len(counts)
     total_failed = sum(counts.values())
-    print(
+    message = (
         f"STATS: {total_lines} lines scanned, {unique_ips} unique IPs, "
-        f"{total_failed} failed attempts, {elapsed_seconds:.3f}s",
-        file=sys.stderr,
+        f"{total_failed} failed attempts, {elapsed_seconds:.3f}s"
     )
+    if dropped_attempts:
+        message += f" ({dropped_attempts} attempts from untracked IPs beyond --max-tracked-ips)"
+    print(message, file=sys.stderr)
 
 
 def write_report(args, counts, users, breaches, bursts):
@@ -232,9 +256,11 @@ def main():
 
     stats = {}
     start = time.monotonic()
-    counts, users, breaches, bursts = scan_log(args.file, args.threshold, args.window, stats=stats)
+    counts, users, breaches, bursts = scan_log(
+        args.file, args.threshold, args.window, stats=stats, max_tracked_ips=args.max_tracked_ips
+    )
     elapsed = time.monotonic() - start
-    print_stats(stats["total_lines"], counts, elapsed)
+    print_stats(stats["total_lines"], counts, elapsed, stats["dropped_attempts"])
 
     if args.output:
         try:
