@@ -109,6 +109,47 @@ def test_scan_log_slow_failures_are_not_a_burst(tmp_path):
     assert bursts == []
 
 
+def test_scan_log_counts_failed_publickey(tmp_path):
+    log = tmp_path / "test.log"
+    log.write_text(
+        "Oct 06 14:02:11 server sshd[1]: Failed publickey for root from 10.0.0.1 port 1 ssh2: RSA SHA256:abcd\n"
+        "Oct 06 14:02:12 server sshd[1]: Failed publickey for root from 10.0.0.1 port 2 ssh2: RSA SHA256:abcd\n"
+    )
+    counts, users, breaches, bursts = scan_log(log, 3, 60)
+    assert counts == {"10.0.0.1": 2}
+    assert users["10.0.0.1"] == ["root", "root"]
+
+
+def test_scan_log_mixes_password_and_publickey_failures(tmp_path):
+    log = tmp_path / "test.log"
+    log.write_text(
+        "Oct 06 14:02:11 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2\n"
+        "Oct 06 14:02:12 server sshd[1]: Failed publickey for root from 10.0.0.1 port 2 ssh2: RSA SHA256:abcd\n"
+        "Oct 06 14:02:13 server sshd[1]: Failed password for root from 10.0.0.1 port 3 ssh2\n"
+    )
+    counts, users, breaches, bursts = scan_log(log, 3, 60)
+    assert counts == {"10.0.0.1": 3}
+
+
+def test_build_report_flags_targeted_root():
+    counts = {"10.0.0.1": 3, "10.0.0.2": 3}
+    users = {"10.0.0.1": ["root", "admin", "root"], "10.0.0.2": ["admin", "guest", "admin"]}
+    report = build_report(counts, users, [], [], 3)
+    targeted_root = {row["ip"]: row["targeted_root"] for row in report}
+    assert targeted_root == {"10.0.0.1": True, "10.0.0.2": False}
+
+
+def test_print_root_attempts_only_above_threshold(capsys):
+    from scanner import print_root_attempts
+
+    counts = {"10.0.0.1": 3, "10.0.0.2": 2}
+    users = {"10.0.0.1": ["root"], "10.0.0.2": ["root"]}
+    print_root_attempts(counts, users, threshold=3)
+    out = capsys.readouterr().out
+    assert "10.0.0.1" in out
+    assert "10.0.0.2" not in out
+
+
 def test_scan_log_skips_malformed_line(tmp_path):
     log = tmp_path / "test.log"
     log.write_text(
@@ -161,5 +202,6 @@ def test_build_report():
             "usernames_tried": ["admin", "root"],
             "burst": True,
             "breached_as": "root",
+            "targeted_root": True,
         }
     ]

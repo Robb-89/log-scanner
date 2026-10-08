@@ -46,7 +46,7 @@ def scan_log(path, threshold, window):
 
     with f:
         for line in f:
-            if "Failed password" in line:
+            if "Failed password" in line or "Failed publickey" in line:
                 try:
                     ip_address, username = parse_line(line)
                     timestamp = parse_time(line, current_year)
@@ -104,6 +104,7 @@ def build_report(counts, users, breaches, bursts, threshold):
                 "usernames_tried": sorted(set(users[ip_address])),
                 "burst": ip_address in bursts,
                 "breached_as": breached.get(ip_address),
+                "targeted_root": "root" in users[ip_address],
             })
     return report
 
@@ -118,6 +119,13 @@ def print_bursts(bursts, threshold, window):
     for ip_address in bursts:
         print(f"BURST: {ip_address} made {threshold} or more failed attempts within {window} seconds")
         print()
+
+
+def print_root_attempts(counts, users, threshold):
+    for ip_address in sorted(counts, key=counts.get, reverse=True):
+        if counts[ip_address] >= threshold and "root" in users[ip_address]:
+            print(f"ROOT ATTEMPT: {ip_address} tried logging in as root")
+            print()
 
 
 def print_report(counts, users, threshold):
@@ -136,7 +144,7 @@ def print_json(report):
 
 def print_csv(report):
     writer = csv.writer(sys.stdout)
-    writer.writerow(["ip", "failed_attempts", "usernames_tried", "burst", "breached_as"])
+    writer.writerow(["ip", "failed_attempts", "usernames_tried", "burst", "breached_as", "targeted_root"])
     for row in report:
         writer.writerow([
             row["ip"],
@@ -144,6 +152,7 @@ def print_csv(report):
             ";".join(row["usernames_tried"]),
             row["burst"],
             row["breached_as"] or "",
+            row["targeted_root"],
         ])
 
 
@@ -158,6 +167,7 @@ def main():
     else:
         print_breaches(breaches)
         print_bursts(bursts, args.threshold, args.window)
+        print_root_attempts(counts, users, args.threshold)
         print_report(counts, users, args.threshold)
 
     return 1 if breaches or bursts else 0

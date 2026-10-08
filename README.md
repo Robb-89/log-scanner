@@ -6,10 +6,11 @@ A Python command-line tool that scans SSH authentication logs to detect brute-fo
 
 ## Features
 
-- Flags IP addresses with repeated failed login attempts
+- Flags IP addresses with repeated failed login attempts, whether by password or by SSH key (`Failed publickey`)
 - Shows which usernames each flagged IP tried
 - Detects bursts: an IP hitting the failure threshold within a short time window, a sign of automated attacks
 - Detects possible breaches: an IP that fails repeatedly and then logs in successfully
+- Flags IPs that targeted the `root` account specifically
 - Ranks flagged IPs from most to fewest failures
 - Handles irregular log lines, such as "invalid user" attempts
 - Handles leap-day timestamps safely
@@ -43,6 +44,10 @@ The included `auth.log` is sample data using reserved documentation IP addresses
 
     BURST: 192.0.2.200 made 3 or more failed attempts within 60 seconds
 
+    ROOT ATTEMPT: 192.0.2.200 tried logging in as root
+
+    ROOT ATTEMPT: 203.0.113.45 tried logging in as root
+
     192.0.2.200: 5 failed login attempts
       Usernames tried: admin, oracle, root, ubuntu
 
@@ -57,22 +62,24 @@ JSON (`--format json`):
         "failed_attempts": 5,
         "usernames_tried": ["admin", "oracle", "root", "ubuntu"],
         "burst": true,
-        "breached_as": "ubuntu"
+        "breached_as": "ubuntu",
+        "targeted_root": true
       },
       {
         "ip": "203.0.113.45",
         "failed_attempts": 3,
         "usernames_tried": ["admin", "root"],
         "burst": false,
-        "breached_as": null
+        "breached_as": null,
+        "targeted_root": true
       }
     ]
 
 CSV (`--format csv`):
 
-    ip,failed_attempts,usernames_tried,burst,breached_as
-    192.0.2.200,5,admin;oracle;root;ubuntu,True,ubuntu
-    203.0.113.45,3,admin;root,False,
+    ip,failed_attempts,usernames_tried,burst,breached_as,targeted_root
+    192.0.2.200,5,admin;oracle;root;ubuntu,True,ubuntu,True
+    203.0.113.45,3,admin;root,False,,True
 
 ## Running tests
 
