@@ -22,10 +22,10 @@ def parse_line(line):
     return ip_address, username
 
 
-def parse_time(line):
+def parse_time(line, year=2000):
     words = line.split()
     timestamp_str = " ".join(words[0:3])
-    timestamp = datetime.strptime("2000 " + timestamp_str, "%Y %b %d %H:%M:%S")
+    timestamp = datetime.strptime(f"{year} " + timestamp_str, "%Y %b %d %H:%M:%S")
     return timestamp
 
 
@@ -35,6 +35,8 @@ def scan_log(path, threshold, window):
     times = {}
     breaches = []
     bursts = []
+    current_year = 2000
+    last_month = None
 
     try:
         f = open(path)
@@ -47,9 +49,18 @@ def scan_log(path, threshold, window):
             if "Failed password" in line:
                 try:
                     ip_address, username = parse_line(line)
-                    timestamp = parse_time(line)
+                    timestamp = parse_time(line, current_year)
                 except (ValueError, IndexError):
                     continue
+
+                # Log lines carry no year, so infer rollovers from month
+                # going backwards (e.g. Dec -> Jan) to keep timestamps
+                # monotonic across a year boundary.
+                if last_month is not None and timestamp.month < last_month:
+                    current_year += 1
+                    timestamp = parse_time(line, current_year)
+                last_month = timestamp.month
+
                 counts[ip_address] = counts.get(ip_address, 0) + 1
 
                 if ip_address not in users:
@@ -149,6 +160,8 @@ def main():
         print_bursts(bursts, args.threshold, args.window)
         print_report(counts, users, args.threshold)
 
+    return 1 if breaches or bursts else 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

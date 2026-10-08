@@ -1,8 +1,9 @@
+import sys
 from datetime import datetime
 
 import pytest
 
-from scanner import parse_line, parse_time, scan_log, build_report
+from scanner import parse_line, parse_time, scan_log, build_report, main
 
 
 def test_parse_line_normal():
@@ -70,6 +71,33 @@ def test_scan_log_detects_burst(tmp_path):
     assert bursts == ["10.0.0.1"]
 
 
+def test_parse_time_explicit_year():
+    line = "Jan 01 00:00:00 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2"
+    assert parse_time(line, year=2001) == datetime(2001, 1, 1, 0, 0, 0)
+
+
+def test_scan_log_year_rollover_not_a_false_burst(tmp_path):
+    log = tmp_path / "test.log"
+    log.write_text(
+        "Dec 31 23:59:55 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2\n"
+        "Jan 01 00:00:00 server sshd[1]: Failed password for root from 10.0.0.1 port 2 ssh2\n"
+        "Jan 01 05:00:00 server sshd[1]: Failed password for root from 10.0.0.1 port 3 ssh2\n"
+    )
+    counts, users, breaches, bursts = scan_log(log, 3, 60)
+    assert bursts == []
+
+
+def test_scan_log_detects_burst_across_year_rollover(tmp_path):
+    log = tmp_path / "test.log"
+    log.write_text(
+        "Dec 31 23:59:55 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2\n"
+        "Jan 01 00:00:00 server sshd[1]: Failed password for root from 10.0.0.1 port 2 ssh2\n"
+        "Jan 01 00:00:05 server sshd[1]: Failed password for root from 10.0.0.1 port 3 ssh2\n"
+    )
+    counts, users, breaches, bursts = scan_log(log, 3, 60)
+    assert bursts == ["10.0.0.1"]
+
+
 def test_scan_log_slow_failures_are_not_a_burst(tmp_path):
     log = tmp_path / "test.log"
     log.write_text(
@@ -98,6 +126,26 @@ def test_scan_log_missing_file_exits_cleanly(tmp_path, capsys):
         scan_log(missing, 3, 60)
     assert exc_info.value.code == 1
     assert "could not read log file" in capsys.readouterr().err
+
+
+def test_main_returns_nonzero_when_findings(tmp_path, monkeypatch):
+    log = tmp_path / "test.log"
+    log.write_text(
+        "Oct 06 14:02:11 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2\n"
+        "Oct 06 14:02:12 server sshd[1]: Failed password for root from 10.0.0.1 port 2 ssh2\n"
+        "Oct 06 14:02:13 server sshd[1]: Failed password for root from 10.0.0.1 port 3 ssh2\n"
+    )
+    monkeypatch.setattr(sys, "argv", ["scanner.py", "--file", str(log), "--threshold", "3"])
+    assert main() == 1
+
+
+def test_main_returns_zero_when_clean(tmp_path, monkeypatch):
+    log = tmp_path / "test.log"
+    log.write_text(
+        "Oct 06 14:02:11 server sshd[1]: Accepted password for root from 10.0.0.1 port 1 ssh2\n"
+    )
+    monkeypatch.setattr(sys, "argv", ["scanner.py", "--file", str(log), "--threshold", "3"])
+    assert main() == 0
 
 
 def test_build_report():
