@@ -78,6 +78,7 @@ def scan_log(path, threshold, window, stats=None):
     counts = {}
     users = {}
     times = {}
+    failures_since_login = {}
     breaches = []
     bursts = []
     current_year = 2000
@@ -90,18 +91,22 @@ def scan_log(path, threshold, window, stats=None):
             try:
                 ip_address, username = parse_line(line)
                 timestamp = parse_time(line, current_year)
+
+                # Log lines carry no year, so infer rollovers from month
+                # going backwards (e.g. Dec -> Jan) to keep timestamps
+                # monotonic across a year boundary. A guessed year can land
+                # on a non-leap year for a real Feb 29 line (e.g. a sparse
+                # log that jumps straight from Dec to Feb); treat that as
+                # unparseable rather than letting it crash the scan.
+                if last_month is not None and timestamp.month < last_month:
+                    current_year += 1
+                    timestamp = parse_time(line, current_year)
+                last_month = timestamp.month
             except (ValueError, IndexError):
                 continue
 
-            # Log lines carry no year, so infer rollovers from month
-            # going backwards (e.g. Dec -> Jan) to keep timestamps
-            # monotonic across a year boundary.
-            if last_month is not None and timestamp.month < last_month:
-                current_year += 1
-                timestamp = parse_time(line, current_year)
-            last_month = timestamp.month
-
             counts[ip_address] = counts.get(ip_address, 0) + 1
+            failures_since_login[ip_address] = failures_since_login.get(ip_address, 0) + 1
 
             if ip_address not in users:
                 users[ip_address] = []
@@ -123,9 +128,10 @@ def scan_log(path, threshold, window, stats=None):
                 ip_address, username = parse_line(line)
             except (ValueError, IndexError):
                 continue
-            failures = counts.get(ip_address, 0)
+            failures = failures_since_login.get(ip_address, 0)
             if failures >= threshold:
                 breaches.append((ip_address, username, failures))
+            failures_since_login[ip_address] = 0
 
     if stats is not None:
         stats["total_lines"] = total_lines

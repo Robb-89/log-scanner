@@ -80,6 +80,24 @@ def test_scan_log_detects_breach(tmp_path):
     assert breaches == [("10.0.0.1", "root", 3)]
 
 
+def test_scan_log_breach_count_resets_after_login(tmp_path):
+    log = tmp_path / "test.log"
+    log.write_text(
+        "Oct 06 14:00:00 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2\n"
+        "Oct 06 14:00:01 server sshd[1]: Failed password for root from 10.0.0.1 port 2 ssh2\n"
+        "Oct 06 14:00:02 server sshd[1]: Failed password for root from 10.0.0.1 port 3 ssh2\n"
+        "Oct 06 14:00:03 server sshd[1]: Accepted password for root from 10.0.0.1 port 4 ssh2\n"
+        "Oct 06 15:00:00 server sshd[1]: Failed password for root from 10.0.0.1 port 5 ssh2\n"
+        "Oct 06 15:00:01 server sshd[1]: Accepted password for root from 10.0.0.1 port 6 ssh2\n"
+    )
+    counts, users, breaches, bursts = scan_log(log, 3, 60)
+    # Only the real breach is reported; a single mistype after a
+    # successful login should not retrigger an alert with an inflated,
+    # lifetime-cumulative failure count.
+    assert breaches == [("10.0.0.1", "root", 3)]
+    assert counts == {"10.0.0.1": 4}
+
+
 def test_scan_log_ignores_normal_login(tmp_path):
     log = tmp_path / "test.log"
     log.write_text(
@@ -123,6 +141,20 @@ def test_scan_log_iso_format_year_boundary_not_a_false_burst(tmp_path):
     )
     counts, users, breaches, bursts = scan_log(log, 3, 60)
     assert bursts == []
+
+
+def test_scan_log_year_rollover_skips_unparseable_leap_day(tmp_path):
+    log = tmp_path / "test.log"
+    log.write_text(
+        # A sparse log that jumps straight from Dec to Feb (skipping Jan)
+        # bumps the guessed year by one for the rollover check. If that
+        # guessed year isn't a leap year, re-parsing "Feb 29" used to
+        # raise an uncaught ValueError and crash the whole scan.
+        "Dec 31 23:59:00 server sshd[1]: Failed password for root from 10.0.0.1 port 1 ssh2\n"
+        "Feb 29 08:00:00 server sshd[1]: Failed password for root from 10.0.0.1 port 2 ssh2\n"
+    )
+    counts, users, breaches, bursts = scan_log(log, 3, 60)
+    assert counts == {"10.0.0.1": 1}
 
 
 def test_parse_time_explicit_year():
