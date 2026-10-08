@@ -36,11 +36,20 @@ def scan_log(path, threshold, window):
     breaches = []
     bursts = []
 
-    with open(path) as f:
+    try:
+        f = open(path)
+    except OSError as e:
+        print(f"Error: could not read log file '{path}': {e.strerror}", file=sys.stderr)
+        sys.exit(1)
+
+    with f:
         for line in f:
             if "Failed password" in line:
-                ip_address, username = parse_line(line)
-                timestamp = parse_time(line)
+                try:
+                    ip_address, username = parse_line(line)
+                    timestamp = parse_time(line)
+                except (ValueError, IndexError):
+                    continue
                 counts[ip_address] = counts.get(ip_address, 0) + 1
 
                 if ip_address not in users:
@@ -59,7 +68,10 @@ def scan_log(path, threshold, window):
                         bursts.append(ip_address)
 
             elif "Accepted password" in line:
-                ip_address, username = parse_line(line)
+                try:
+                    ip_address, username = parse_line(line)
+                except (ValueError, IndexError):
+                    continue
                 failures = counts.get(ip_address, 0)
                 if failures >= threshold:
                     breaches.append((ip_address, username, failures))
